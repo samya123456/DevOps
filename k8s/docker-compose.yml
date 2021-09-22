@@ -1,0 +1,32 @@
+#  For use only when running the application locally.  This Docker Compose file will build a local 
+#  instance of PostgreSQL to run in a multi-container environment, required for testing ValueDate 
+#  locally after transitioning to a micro service.
+version: "3.8"
+
+services:
+    postgres-container:
+        container_name: postgres-image
+        image:  postgres:11.11-alpine
+        ports:
+            - "5432:5432"
+        volumes:
+            - C:\DEV\postgres\value_date_data:/var/lib/postgresql/data
+        environment:
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+    
+    value_date-container:
+        image: value_date-image
+        container_name: value_date-image
+        ports:
+            - "49176:443"
+        links:
+            - postgres-container
+        depends_on: 
+            postgres-container:
+                condition: service_healthy 

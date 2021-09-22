@@ -1,0 +1,162 @@
+/* import groovy.json.*;
+import groovy.util.*; 
+import groovy.xml.*;
+
+def jfrogHost = 'artifactory.wureachprod.awswuintranet.net'
+def jfrogRepo = 'wu-businesssolutions-wubs-docker-dev'
+def appName   = 'vam'
+def XRAY_SCAN =  true
+def FAIL_BUILD = true
+
+def art_jfrog,image_url,xrayConfig,xrayResults,image_version,image_name,emailRecipients,buildInfo
+def rt_docker 
+
+pipeline { 
+  agent {
+        kubernetes {
+            label 'wubs-dind'
+            defaultContainer 'wubs-mvn-dind'           
+        }
+    }
+     stages {        
+          stage('Initialize') {
+                 steps {
+                     script {
+                        currentBuild.description = "Environment: DEV"
+                        buildInfo = Artifactory.newBuildInfo()
+                        buildInfo.env.capture = true
+                        image_version = readMavenPom().getVersion()
+                        image_name = "vam-ref-project"
+                        buildInfo.name = "wu-businesssolutions-wubs-*--*/**"
+                        buildInfo.number = "${image_version}"
+                        image_url = "${jfrogHost}" + "/" + "${jfrogRepo}" + "/" + "${appName}" + "/" + "${image_name}" + ":" + "${image_version}"                     
+                        emailRecipients = "UdayBhanu.Dutta@wu.com"
+                     }
+                }
+          }          
+          stage('Compile') {
+           steps{            	                                     
+              	 sh 'mvn clean -DskipTests compile install'
+               }                
+          }          
+          stage('Sonar Code Scan'){            
+            steps{                
+                    sh "mvn sonar:sonar -Dsonar.projectKey='VAM-Ref-Project' -Dsonar.host.url=https://sonarqube.sharedservices.awswuintranet.net  -Dsonar.login=54ceb07a141a57a63d46ae24bfbaa5ae2127de04"           
+            }
+         }        
+        stage('Sonar Quality Gate'){            
+            steps{
+                script{
+                    echo "Waiting for SonarQ Result =60s"
+                    sleep(60)
+                    withSonarQubeEnv('awswusonar') {}
+                    def qg = waitForQualityGate() 
+                    if (qg.status != 'OK') {
+                        error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                    }
+                }
+            }
+        }      
+          stage('Checkmarx'){           
+            steps{
+                step([$class: 'CxScanBuilder', avoidDuplicateProjectScans: true, comment: '', credentialsId: '', excludeFolders: '', excludeOpenSourceFolders: '', exclusionsSetting: 'global', failBuildOnNewResults: false, failBuildOnNewSeverity: 'HIGH', filterPattern: '''!**/_cvs/**/*, !**/.svn/**/*,   !**/.hg/**/*,   !**/.git/**/*,  !**/.bzr/**/*, !**/bin/**/*,
+                        !**/obj/**/*,  !**/backup/**/*, !**/.idea/**/*, !**/*.DS_Store, !**/*.ipr,     !**/*.iws,
+                        !**/*.bak,     !**/*.tmp,       !**/*.aac,      !**/*.aif,      !**/*.iff,     !**/*.m3u, !**/*.mid, !**/*.mp3,
+                        !**/*.mpa,     !**/*.ra,        !**/*.wav,      !**/*.wma,      !**/*.3g2,     !**/*.3gp, !**/*.asf, !**/*.asx,
+                        !**/*.avi,     !**/*.flv,       !**/*.mov,      !**/*.mp4,      !**/*.mpg,     !**/*.rm,  !**/*.swf, !**/*.vob,
+                        !**/*.wmv,     !**/*.bmp,       !**/*.gif,      !**/*.jpg,      !**/*.png,     !**/*.psd, !**/*.tif, !**/*.swf,
+                        !**/*.jar,     !**/*.zip,       !**/*.rar,      !**/*.exe,      !**/*.dll,     !**/*.pdb, !**/*.7z,  !**/*.gz,
+                        !**/*.tar.gz,  !**/*.tar,       !**/*.gz,       !**/*.ahtm,     !**/*.ahtml,   !**/*.fhtml, !**/*.hdm,
+                        !**/*.hdml,    !**/*.hsql,      !**/*.ht,       !**/*.hta,      !**/*.htc,     !**/*.htd, !**/*.war, !**/*.ear,
+                        !**/*.htmls,   !**/*.ihtml,     !**/*.mht,      !**/*.mhtm,     !**/*.mhtml,   !**/*.ssi, !**/*.stm,
+                        !**/*.stml,    !**/*.ttml,      !**/*.txn,      !**/*.xhtm,     !**/*.xhtml,   !**/*.class, !**/*.iml, !Checkmarx/Reports/*.*''', 
+                    fullScanCycle: 10, 
+                    fullScansScheduled: true, 
+                    groupId: '4e2c0e9c-d5b6-431a-938f-0ba184d3b458', 
+                    includeOpenSourceFolders: '', 
+                    incremental: true, 
+                    osaArchiveIncludePatterns: '*.zip, *.war, *.ear, *.tgz', 
+                    osaEnabled: true, 
+                    osaInstallBeforeScan: false, 
+                    password: '{AQAAABAAAAAQv8HcoGFJLmrwniptb69hz/PgcrRxkN0eG7KdGpVc97w=}', 
+                    preset: '36', 
+                    projectName: 'VAM-Ref-Project', 
+                    sastEnabled: true, 
+                    serverUrl: 'https://checkmarx.wuintranet.net/', 
+                    sourceEncoding: '1', 
+                    username: '', 
+                    vulnerabilityThresholdResult: 'FAILURE',
+                    highThreshold: 5])
+            }
+        }
+          stage('Docker Image Build') {
+                 steps {                     
+                     sh "docker build --network host -t ${image_url} ."
+                 }
+          }         
+          stage('Docker Image Push') {
+                    steps {
+                    withCredentials([usernamePassword(credentialsId: 'Ip_Artifactory_Push', passwordVariable: 'AFPASS', usernameVariable: 'AFUSER')]){                    
+                    script {
+                        art_jfrog = Artifactory.newServer url: "https://artifactory.wureachprod.awswuintranet.net/artifactory/", username: "${AFUSER}", password: "${AFPASS}"
+                        rt_docker = Artifactory.docker server: art_jfrog
+                    	rt_docker.push("${image_url}", "${jfrogRepo}", buildInfo)
+                    	art_jfrog.publishBuildInfo buildInfo  
+                    	writeFile file: 'build.properties', text: "imageurl=$image_url"
+           				archiveArtifacts 'build.properties'                    	
+                    }                 
+                    }
+              } 
+		  }
+              	
+       stage('Xray Scan'){            
+            steps {
+                script {
+                	if(XRAY_SCAN){
+                    xrayConfig = [
+                        'buildName'     : buildInfo.name,
+                        'buildNumber'    : buildInfo.number,
+                        'failBuild'     : "${FAIL_BUILD}".toBoolean()
+                    ]
+                    echo xrayConfig as String
+                    xrayResults = art_jfrog.xrayScan xrayConfig
+                    echo xrayResults as String
+                }
+                }
+            }        
+        }
+        }
+        
+   post {
+        success {
+        	sendSuccessNotificationEmail(emailRecipients)
+        }
+        failure {
+            echo("Failure!")
+        }
+        aborted {
+            echo("Aborted!")
+        }
+    }
+ }
+    def sendSuccessNotificationEmail(emailRecipients){
+    	def emailRecipientsAry;
+		if (emailRecipients.contains(",")) {
+			emailRecipientsAry = emailRecipients.split(',');
+		} else {
+			emailRecipientsAry = [ emailRecipients ];
+		}
+		for (int i = 0; i < emailRecipientsAry.size(); i++) {
+			def email_recipient = emailRecipientsAry[i];
+			emailext (
+              attachLog: true, 
+              compressLog:true,
+              subject: "SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+              mimeType: "text/html",
+              body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}] ${env.BUILD_URL}'</p>""",
+              to: "${email_recipient}",
+              from: "devops2.0-jenkins@devops.com"
+            )
+		}
+    }*/
+

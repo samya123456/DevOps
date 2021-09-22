@@ -1,0 +1,102 @@
+---
+- name: Deployment to EC2
+  hosts: all
+  become_user: ec2-user
+  tasks:
+#   - name: Remove existing wars from projects
+#    file:
+#       path: "{{item.ec2Path}}"
+#       state: absent
+#     with_items: "{{projectsToDeploy}}"
+   
+      
+    - name: downloading wars into temp dir
+      get_url:
+        url: "{{item.artifactoryPath}}"
+        dest: "/opt/cdDeployDir/{{item.ec2Path_temp}}"
+        validate_certs: no
+        timeout: 30
+      with_items: "{{projectsToDeploy}}"
+
+    - name: deploying the wars into tomcat
+      shell: cp -rp /opt/cdDeployDir/{{item.ec2Path_temp}} {{item.ec2Path}}
+      with_items: "{{projectsToDeploy}}"
+    
+    - name: removing wars from temp
+      shell: rm  /opt/cdDeployDir/{{item.ec2Path_temp}}
+      with_items: "{{projectsToDeploy}}"
+
+    - name: adding version of wars deployed
+      shell: | 
+         cd /tmp/versions
+         echo "version : {{item.version}} | url : {{item.artifactoryPath}}" > {{item.artifactId}}.txt
+      with_items: "{{projectsToDeploy}}"
+
+      
+    # - name: stop Tomcat
+    #   shell: pkill -9 -f tomcat
+    #   become : true 
+
+    # - name: removing existing libs
+    #   file: 
+    #     path: /opt/apache-tomcat-9.0.34/lib/geo-crypto-verification*
+    #     state: absent
+    #   file: 
+    #     path: /opt/apache-tomcat-9.0.34/lib/geo-security-callbacks*
+    #     state: absent
+    #   file: 
+    #     path: /opt/apache-tomcat-9.0.34/lib/geo-tc-security-provider*
+    #     state: absent 
+    #   when: '"{{item.artifactId}}"== "geo-web"'       
+    #   with_items : "{{projectsToDeploy}}"
+    - name: removing existing libs
+      shell: |
+        cd /opt/apache-tomcat-9.0.34/lib
+        rm geo-crypto-verification*
+        rm geo-security-callbacks*
+        rm geo-tc-security-provider*
+      when: '"{{item.artifactId}}"== "geo-web"'
+      with_items: "{{projectsToDeploy}}"
+      ignore_errors: True
+
+
+    # - name: removing existing libs
+    #   file: 
+    #     path: /opt/apache-tomcat-9.0.34/lib/geo-crypto-verification*
+    #     state: absent
+    #   file: 
+    #     path: /opt/apache-tomcat-9.0.34/lib/geo-security-callbacks*
+    #     state: absent
+    #   file: 
+    #     path: /opt/apache-tomcat-9.0.34/lib/geo-tc-security-provider*
+    #     state: absent 
+    #   when: '"{{item.artifactId}}"== "geo-web"'       
+    #   with_items : "{{projectsToDeploy}}"
+
+    - name: adding lib files to tomcat 1
+      get_url:
+        url: "{{item.path1}}"
+        dest: "{{item.destination}}"
+        validate_certs: no
+        timeout: 30    
+      when: '"{{item.artifactId}}"== "geo-web"'
+      with_items: "{{projectsToDeploy}}"
+      
+    - name: adding lib files to tomcat 2
+      get_url:
+        url: "{{item.path2}}"
+        dest: "{{item.destination}}"
+        validate_certs: no
+        timeout: 30   
+      when: '"{{item.artifactId}}"== "geo-web"'
+      with_items: "{{projectsToDeploy}}"
+
+    - name: adding lib files to tomcat 3
+      get_url:
+        url: "{{item.path3}}"
+        dest: "{{item.destination}}"
+        validate_certs: no
+        timeout: 30        
+      when: '"{{item.artifactId}}"== "geo-web"'
+      with_items: "{{projectsToDeploy}}"     
+

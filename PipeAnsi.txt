@@ -1,0 +1,496 @@
+@Library('GP2_Common_CICD_Library@commonlib.dev.test') _
+
+import groovy.json.*;
+import groovy.util.*;
+
+
+pipeline {
+    
+	agent {
+       label 'slave-jdk1.8'
+    }
+
+    environment {
+        TIMEOUT_MVN_PACKAGE = 6000
+        TIMEOUT_MVN_UNIT_TEST = 8000
+        TIMEOUT_MVN_SONAR_CS = 5000
+        TIMEOUT_MVN_SONAR_QG = 2000
+        TIMEOUT_CHECKMARX = 900
+        TIMEOUT_MVN_RELEASE_PREPARE = 9000
+        TIMEOUT_CONFIG_CHECKOUT = 200
+        TIMEOUT_STAGE= 200
+		TIMEOUT_DB_PATCH = 1000
+		TIMEOUT_DB_ASSEMBLY_ZIP_UNZIP = 1000
+        BUILD_STAGE = ''
+        CONFIG_METADATA = null
+        POM_VERSION = readMavenPom().getVersion()
+	    DB_ASSEMBLY_RELEASE = readMavenPom().getVersion().replaceAll("-SNAPSHOT","")
+        GEO_WEB = readMavenPom().getVersion().replaceAll("-SNAPSHOT","")
+        ENV_METADATA = null
+        MAVEN_RELEASE_PLUGIN_COMMIT = null
+        TRIGGERED_BY_SCM = null
+        IS_DEV_RELEASE_BRANCH = null
+        GIT_CRED_ID = "s_jenkins_checkout"
+        
+
+    }
+    parameters {
+        choice(choices: ['BUILD', 'TEST', 'RELEASE', 'QA_SCAN', 'CHECKMARX'], description: 'CI/CD OPERATION', name: 'OPERATION')
+        choice(choices: ['DEV','QA1','QA2'], description: 'Target AWS Environment', name: 'PROFILE') 
+        booleanParam(defaultValue: false, description: 'Flag to skip test. Inapplicable when the operation is TEST.', name: 'SKIP_TEST')
+        booleanParam(defaultValue: false, description: 'Flag to skip sonar scan. Inapplicable when the operation is QA_SCAN.', name: 'SKIP_QA')   
+        booleanParam(defaultValue: false, description: 'Flag to skip checkmarx. Inapplicable when operation is checkmarx', name: 'SKIP_CHECKMARX')
+        booleanParam(defaultValue: false, description: 'Flag to run DB Assembly.', name: 'RUN_DB_ASSEMBLY')
+		booleanParam(defaultValue: false, description: 'Flag to decide to deploy.', name: 'DEPLOY_TO_EC2')
+        string(defaultValue: "https://checkmarx.wuintranet.net/", description: 'Checkmarx server URL', name: 'CHECKMARX_URL')
+        string(defaultValue: "awswusonar", description: 'Name of the SonarQube environment configured in Jenkins', name: 'SONARQUBE_ENV')
+        string(defaultValue: "Trina.Sriram@wu.com,Amit.Raut@wu.com,Lois.Choi@wu.com,Siddharth.Thakkar@wu.com", description: 'Recipient(s) to receive Jenkins notification email (separated by \",\")', name: 'EMAIL_NOTIFICATION_RECIPIENTS')
+        string(defaultValue: "", description: 'Maven Release Version. Default to project version if not specified', name: 'RELEASE_VERSION')
+        string(defaultValue: "", description: 'Next Maven Release Version. Version will auto increment if not specified', name: 'SNAPSHOT_VERSION')
+        string(defaultValue: "c2bcd1b9-b69d-47be-9fb6-d7ce753acc30", description: 'Jenkins configuration file id for Maven Settings', name: 'MAVEN_CONFIG_ID')
+        string(defaultValue: "s_jenkins_checkout", description: 'Jenkins credentials id for the source code repository access', name: 'GIT_CRED_ID')
+        string(defaultValue: "GP2_JFROG", description: 'Jenkins credentials id for the GP2 maven repository access', name: 'JFROG_CRED_ID')
+        string(defaultValue: "Checkmarx", description: 'Jenkins credentials id for the Checkmarx access', name: 'CHECKMARX_CRED_ID')
+        string(defaultValue: "https://gitlab.wuintranet.net/wubs-deploy-scripts/gp2_configuration.git", description: 'GP2 Configuration repository where all config, certs, env specific data are stored', name: 'CONFIG_REPO_URL')
+        string(defaultValue: "master", description: 'GP2 Configuration repository branch', name: 'MASTER_BRANCH')
+		
+    }
+
+    stages {
+        
+        stage('Package & Install') {
+            when {
+                expression {
+                    return params.OPERATION == 'BUILD' || params.OPERATION == 'QA_SCAN';
+                }
+            }
+            steps {
+                script {
+                    BUILD_STAGE = env.STAGE_NAME
+                }
+                timeout(time: TIMEOUT_MVN_PACKAGE, unit: 'SECONDS') {
+                    retry(3) {
+                        configFileProvider([configFile(fileId: "${params.MAVEN_CONFIG_ID}", variable: 'MAVEN_SETTINGS')]) {
+                            withCredentials([usernamePassword(credentialsId: "${params.JFROG_CRED_ID}", usernameVariable: 'JFROG_USERNAME', passwordVariable: 'JFROG_PASSWORD')]){
+                            sh("mvn -s ${MAVEN_SETTINGS} clean install -Dsource.skip=true -U -Dmaven.javadoc.skip=true -DskipTests -Djfrog.username=${JFROG_USERNAME} -Djfrog.password='${JFROG_PASSWORD}'" )
+                             }
+                        }
+                    }
+                }
+            }
+        }
+    
+
+		stage('DB Assembly') {
+          when { 
+           expression {
+              return (params.OPERATION == 'BUILD' && params.RUN_DB_ASSEMBLY);
+               }
+            }
+            steps {
+              script {
+                BUILD_STAGE = env.STAGE_NAME
+               
+              
+             timeout(time: TIMEOUT_MVN_UNIT_TEST, unit: 'SECONDS') {
+                configFileProvider([configFile(fileId: "${params.MAVEN_CONFIG_ID}", variable: 'MAVEN_SETTINGS'),
+                                   configFile(fileId: "GP2_DBS", variable: 'GP2_DBS')]) {
+                    def props = readProperties file: "${GP2_DBS}"
+                     withCredentials([usernamePassword(credentialsId: "GP2_${params.PROFILE}_TEST_DB", usernameVariable: 'DB_USER', passwordVariable: 'DB_PASSWORD')]) {
+                      withEnv(["GEO_DB_URL=jdbc:oracle:thin:@${props["${params.PROFILE}_TEST_HOST"]}:${props["${params.PROFILE}_TEST_PORT"]}/${props["${params.PROFILE}_TEST_SID"]}", "GEO_DB_USER=${DB_USER}", "GEO_DB_PASSWORD=${DB_PASSWORD}",
+                      "GEO_DB_SID=${props["${params.PROFILE}_TEST_SID"]}","GEO_DB_HOST=${props["${params.PROFILE}_TEST_HOST"]}","GEO_DB_PORT=${props["${params.PROFILE}_TEST_PORT"]}"]) {
+                      
+                         sh("mvn -s ${MAVEN_SETTINGS} -pl assembly/geo-database-assembly clean package -PrefreshDb2 -DapplicationLogFolderPath=${WORKSPACE}")
+                    }
+                   }
+                   }
+                   }
+          
+                }
+            }
+     }
+                 
+
+        stage('Unit Test') {
+            when {
+                expression {
+                    return (params.OPERATION == 'RELEASE' && !params.SKIP_TEST) || params.OPERATION == 'TEST' || params.OPERATION == 'BUILD';
+                }
+            }
+            steps {
+                script {
+                    BUILD_STAGE = env.STAGE_NAME
+                
+                    timeout(time: TIMEOUT_MVN_UNIT_TEST, unit: 'SECONDS') {
+                        configFileProvider([configFile(fileId: "${params.MAVEN_CONFIG_ID}", variable: 'MAVEN_SETTINGS'),
+                                            configFile(fileId: "GP2_DBS", variable: 'GP2_DBS')]) {
+                            def props = readProperties file: "${GP2_DBS}"
+                            withCredentials([usernamePassword(credentialsId: "GP2_${params.PROFILE}_TEST_DB", usernameVariable: 'DB_USER', passwordVariable: 'DB_PASSWORD')]) {
+                                withEnv(["GEO_DB_URL=jdbc:oracle:thin:@${props["${params.PROFILE}_HOST"]}:${props["${params.PROFILE}_PORT"]}/${props["${params.PROFILE}_SID"]}", "GEO_DB_USER=${DB_USER}", "GEO_DB_PASSWORD=${DB_PASSWORD}",
+                                "GEO_DB_SID=${props["${params.PROFILE}_SID"]}","GEO_DB_HOST=${props["${params.PROFILE}_HOST"]}","GEO_DB_PORT=${props["${params.PROFILE}_PORT"]}"]) {
+                                    sh("mvn -s ${MAVEN_SETTINGS} test -Dmaven.test.failure.ignore=true  -DapplicationLogFolderPath=.")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage ('Junit Test Report') {
+            when {
+               expression {
+                 return (params.OPERATION == 'RELEASE' && !params.SKIP_TEST) || params.OPERATION == 'TEST'|| params.OPERATION == 'BUILD';
+               }
+           }
+           steps {
+               script {
+                   BUILD_STAGE = env.STAGE_NAME
+                   timeout(time: TIMEOUT_MVN_UNIT_TEST, unit: 'SECONDS') {    
+                   } 
+                }
+                junit '**/TEST-*.xml'
+            }
+       }
+
+
+        stage('SonarQube Code Scan') {
+            when {
+                expression {
+                    return (params.OPERATION == 'RELEASE' && !params.SKIP_QA) || params.OPERATION == 'QA_SCAN';
+                }
+            }
+            steps {
+                script {
+                    BUILD_STAGE = env.STAGE_NAME
+                }
+                timeout(time: TIMEOUT_MVN_SONAR_CS, unit: 'SECONDS') {
+                    retry(3) {
+                        configFileProvider([configFile(fileId: "${params.MAVEN_CONFIG_ID}", variable: 'MAVEN_SETTINGS')]) {
+                            withSonarQubeEnv("${params.SONARQUBE_ENV}") {
+                                sh("mvn -s ${MAVEN_SETTINGS} sonar:sonar -U -X")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Sonar Quality Gate') {
+            when {
+                expression {
+                    return (params.OPERATION == 'RELEASE' && !params.SKIP_QA) || params.OPERATION == 'QA_SCAN';
+                }
+            }
+            steps {
+                script {
+                    BUILD_STAGE = env.STAGE_NAME
+                }
+                timeout(time: TIMEOUT_MVN_SONAR_QG, unit: 'SECONDS') {
+                    retry(3) {
+                        script {
+                            sleep(10)
+                            def qg = waitForQualityGate()
+                            if (qg.status != 'OK') {
+                                error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Checkmarx Code Scan') {
+            when{
+                expression{
+                    return params.OPERATION == 'CHECKMARX' || (params.OPERATION == 'RELEASE' && !params.SKIP_CHECKMARX);
+                }
+            }
+            steps{
+                script{
+                    BUILD_STAGE = env.STAGE_NAME
+                }
+                timeout(time: TIMEOUT_CHECKMARX, unit: 'SECONDS'){
+                    retry(3){
+                        withCredentials([usernamePassword(credentialsId: "${params.CHECKMARX_CRED_ID}", usernameVariable: 'CHECKMARX_USERNAME', passwordVariable: 'CHECKMARX_PASSWORD')]) {
+                            step([$class: 'CxScanBuilder',
+                                avoidDuplicateProjectScans: true,
+                                comment: '',
+                                credentialsId: '',
+                                excludeFolders: '',
+                                excludeOpenSourceFolders: '',
+                                exclusionsSetting: 'global',
+                                failBuildOnNewResults: false,
+                                failBuildOnNewSeverity: 'HIGH',
+                                filterPattern: '''!**/_cvs/**/*, !**/.svn/**/*,   !**/.hg/**/*,   !**/.git/**/*,  !**/.bzr/**/*, !**/bin/**/*,
+                                                !**/obj/**/*,  !**/backup/**/*, !**/.idea/**/*, !**/*.DS_Store, !**/*.ipr,     !**/*.iws,
+                                                !**/*.bak,     !**/*.tmp,       !**/*.aac,      !**/*.aif,      !**/*.iff,     !**/*.m3u, !**/*.mid, !**/*.mp3,
+                                                !**/*.mpa,     !**/*.ra,        !**/*.wav,      !**/*.wma,      !**/*.3g2,     !**/*.3gp, !**/*.asf, !**/*.asx,
+                                                !**/*.avi,     !**/*.flv,       !**/*.mov,      !**/*.mp4,      !**/*.mpg,     !**/*.rm,  !**/*.swf, !**/*.vob,
+                                                !**/*.wmv,     !**/*.bmp,       !**/*.gif,      !**/*.jpg,      !**/*.png,     !**/*.psd, !**/*.tif, !**/*.swf,
+                                                !**/*.jar,     !**/*.zip,       !**/*.rar,      !**/*.exe,      !**/*.dll,     !**/*.pdb, !**/*.7z,  !**/*.gz,
+                                                !**/*.tar.gz,  !**/*.tar,       !**/*.gz,       !**/*.ahtm,     !**/*.ahtml,   !**/*.fhtml, !**/*.hdm,
+                                                !**/*.hdml,    !**/*.hsql,      !**/*.ht,       !**/*.hta,      !**/*.htc,     !**/*.htd, !**/*.war, !**/*.ear,
+                                                !**/*.htmls,   !**/*.ihtml,     !**/*.mht,      !**/*.mhtm,     !**/*.mhtml,   !**/*.ssi, !**/*.stm,
+                                                !**/*.stml,    !**/*.ttml,      !**/*.txn,      !**/*.xhtm,     !**/*.xhtml,   !**/*.class, !**/*.iml, !Checkmarx/Reports/*.*''',
+                                fullScanCycle: 10,
+                                fullScansScheduled: true,
+                                groupId: '4e2c0e9c-d5b6-431a-938f-0ba184d3b458',
+                                includeOpenSourceFolders: '',
+                                incremental: true,
+                                osaArchiveIncludePatterns: '*.zip, *.war, *.ear, *.tgz',
+                                osaEnabled: false,
+                                osaInstallBeforeScan: true,
+                                password: "${CHECKMARX_PASSWORD}",
+                                preset: '36',
+                                projectName: "${def fullProjectName = currentBuild.fullProjectName.split('/'); return "${fullProjectName[0]}_${fullProjectName[1]}"}",
+                                sastEnabled: true,
+                                serverUrl: "${params.CHECKMARX_URL}",
+                                sourceEncoding: '1',
+                                username: "${CHECKMARX_USERNAME}",
+                                vulnerabilityThresholdResult: 'FAILURE'])
+
+                            publishHTML([allowMissing: true,
+                                alwaysLinkToLastBuild: false,
+                                keepAll: true,
+                                reportDir: "${WORKSPACE}/Checkmarx/Reports/",
+                                reportFiles: 'Report_CxSAST.html',
+                                reportName: 'CheckMarx HTML Report',
+                                reportTitles: ''])
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Maven Release : Prepare And Perform') {
+            when {
+                expression {
+                    return params.OPERATION == 'RELEASE';
+                }
+            }
+            steps { 
+               
+                script {
+                    BUILD_STAGE = env.STAGE_NAME
+         
+            
+                }
+                timeout(time: TIMEOUT_MVN_RELEASE_PREPARE, unit: 'SECONDS') {
+                    retry(3) {
+                        configFileProvider([configFile(fileId: "${params.MAVEN_CONFIG_ID}", variable: 'MAVEN_SETTINGS')]) {
+                            withCredentials([usernamePassword(credentialsId: "${params.GIT_CRED_ID}", usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD'),
+                                            usernamePassword(credentialsId: "${params.JFROG_CRED_ID}", usernameVariable: 'JFROG_USERNAME', passwordVariable: 'JFROG_PASSWORD')]) {
+                                sh("mvn -s ${MAVEN_SETTINGS} release:clean release:prepare release:perform -B -U -Dresume -Darguments='-DskipTests=true -Dmaven.javadoc.skip=true' -Dgitlab.username=${GIT_USERNAME} -Dgitlab.password=${GIT_PASSWORD} -Djfrog.username=${JFROG_USERNAME} -Djfrog.password='${JFROG_PASSWORD}'" + (params.RELEASE_VERSION ? " -DreleaseVersion=${params.RELEASE_VERSION}" : "") + (params.SNAPSHOT_VERSION ? " -DdevelopmentVersion=${params.SNAPSHOT_VERSION}" : ""))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+		stage('Checkout DB patch Scripts') {
+            when {
+                expression {
+                    return (params.OPERATION == 'RELEASE'  && params.RUN_DB_ASSEMBLY) ;
+                }
+            }
+            steps {
+                script {
+                    BUILD_STAGE = env.STAGE_NAME
+                }
+                timeout(time: TIMEOUT_CONFIG_CHECKOUT, unit: 'SECONDS') {
+                    retry(3) {
+                        git branch: "master", credentialsId: "${params.GIT_CRED_ID}", url: "https://gitlab.wuintranet.net/wubs-deploy-scripts/gp2_db_assembly_scripts.git"
+                        
+                    }
+                }
+            }
+        }
+		
+		stage('DB Assembly ZIP Download And UnZip'){
+            when {
+                expression {
+                    return (params.OPERATION == 'RELEASE' && params.RUN_DB_ASSEMBLY);
+                }
+            }
+            steps {
+                script {
+                    BUILD_STAGE = env.STAGE_NAME
+                }
+                timeout(time: TIMEOUT_DB_ASSEMBLY_ZIP_UNZIP, unit: 'SECONDS') {
+                    withCredentials([usernamePassword(credentialsId: "${params.JFROG_CRED_ID}", usernameVariable: 'JFROG_USER', passwordVariable: 'JFROG_PASSWORD')]) {
+					rtServer (
+                            id: 'gp2-jfrog',
+                            url: 'https://artifactory.wuintranet.net/artifactory/',
+                            // If you're using username and password:
+                            username: "${JFROG_USER}",
+                            password: "${JFROG_PASSWORD}",
+                            // If you're using Credentials ID:
+                            credentialsId: "${params.JFROG_CRED_ID}",
+                            // If Jenkins is configured to use an http proxy, you can bypass the proxy when using this Artifactory server:
+                            bypassProxy: true,
+                            // Configure the connection timeout (in seconds).
+                            // The default value (if not configured) is 300 seconds:
+                            timeout: 300
+                    )
+                    }
+
+					rtDownload(
+							 serverId: 'gp2-jfrog',
+					         spec: '''{
+    "files": [{
+             "pattern": "wubs-gp2-maven-dev/com/travelex/tgbp/geo/geo-database-assembly/${DB_ASSEMBLY_RELEASE}/geo-database-assembly-${DB_ASSEMBLY_RELEASE}-assembly.zip",
+            "target": "${DB_ASSEMBLY_RELEASE}"
+             }]
+}
+''',
+                             buildName:'',
+                             buildNumber:'',
+                             failNoOp: true,
+                    )
+                    sh "unzip ${DB_ASSEMBLY_RELEASE}/com/travelex/tgbp/geo/geo-database-assembly/${DB_ASSEMBLY_RELEASE}"
+                }
+            }
+        }
+		
+		stage('Apply DB Patch in CI') {
+          when { 
+           expression {
+              return (params.OPERATION == 'RELEASE' && params.RUN_DB_ASSEMBLY);
+               }
+            }
+            steps {
+              script {
+                BUILD_STAGE = env.STAGE_NAME
+
+              
+             timeout(time: TIMEOUT_DB_PATCH, unit: 'SECONDS') {
+                
+                configFileProvider([configFile(fileId: "${params.MAVEN_CONFIG_ID}", variable: 'MAVEN_SETTINGS'),
+                                   configFile(fileId: "GP2_DBS", variable: 'GP2_DBS')]) {
+                    def props = readProperties file: "${GP2_DBS}"
+                     withCredentials([usernamePassword(credentialsId: "GP2_${params.PROFILE}_DB", usernameVariable: 'DB_USER', passwordVariable: 'DB_PASSWORD')]) {
+                       withEnv(["GEO_DB_USER=${DB_USER}", "GEO_DB_PASSWORD=${DB_PASSWORD}",
+                                "GEO_DB_HOST=${props["${params.PROFILE}_HOST"]}","GEO_DB_PORT=${props["${params.PROFILE}_PORT"]}","GEO_DB_SID=${props["${params.PROFILE}_SID"]}",
+                                "GEO_DB_URL=jdbc:oracle:thin:@${props["${params.PROFILE}_HOST"]}:${props["${params.PROFILE}_PORT"]}/${props["${params.PROFILE}_SID"]}" ]) {
+                                       echo "DB USER--${DB_USER}"
+                                        echo "DB PASSWORD--${DB_PASSWORD}"
+                                        echo "DB PROFILE--${params.PROFILE}"
+                        sh "echo user=${GEO_DB_USER} >> ./jenkins_config.cfg"
+                        sh "echo \n >> ./jenkins_config.cfg"
+                        sh "echo service=${GEO_DB_SID} >> ./jenkins_config.cfg"
+                        sh "echo \n >> ./jenkins_config.cfg"
+                        sh "echo jdbcUrl=${GEO_DB_HOST}:${GEO_DB_PORT}/${GEO_DB_SID} >> ./jenkins_config.cfg"
+                        sh "echo \n >> ./jenkins_config.cfg"
+                        sh "echo applyMissingPatches=true >> ./jenkins_config.cfg"
+                        sh "echo \n >> ./jenkins_config.cfg"
+                        sh "echo createTestData=false >> ./jenkins_config.cfg"
+                        sh "echo \n >> ./jenkins_config.cfg"
+                        sh "echo createI18nData=true >> ./jenkins_config.cfg"
+                        sh "echo \n >> ./jenkins_config.cfg"
+                        sh "echo i18nTranslations=true >> ./jenkins_config.cfg"
+                        sh "mv ./jenkins_config.cfg distro"
+
+
+						sh "sh build/applyDBPatch.sh ${params.PROFILE} ${GEO_DB_USER} ${GEO_DB_PASSWORD} ${GEO_DB_HOST} ${GEO_DB_PORT} ${GEO_DB_SID}"
+                                          
+                    }
+                   }
+                   }
+                   }
+          
+                }
+            }
+		}
+
+
+        stage('Stop tomcat'){
+             when {
+                 expression {
+                     return (params.OPERATION == 'RELEASE' && params.PROFILE == 'DEV' && params.DEPLOY_TO_EC2) ;
+                 }
+             }
+            steps {
+             dir('configuration'){
+                git branch: "${MASTER_BRANCH}", credentialsId: 's_jenkins_checkout', url: "${CONFIG_REPO_URL}"
+                script {
+                ENV_METADATA = (new JsonSlurper().parseText(sh(script: "cat ${PROFILE.toLowerCase()}.json", returnStdout: true).toString().trim()))
+                
+                def web_metadata = (sh(script: "cat geo_web_metadata.json", returnStdout: true).toString().trim()) 
+                def cma_import_web_metadata = (sh(script: "cat cma_import_web_metadata.json", returnStdout: true).toString().trim()) 
+                def trunk_deployable = "{projectsToDeploy: ["+web_metadata+","+cma_import_web_metadata+"]}"
+                ansibleTower(
+                        towerServer: 'Jenkins-AWX',
+                        templateType: 'job',
+                        jobTemplate: 'stop_tomcat',
+                        importTowerLogs: true,
+                        inventory: 'WUBS-Non-Prod-Account',
+                        jobTags: '',
+                        skipJobTags: '',
+                        limit: ENV_METADATA['ec2_ips'],
+                        removeColor: false,
+                        verbose: true,
+                        credential: '[wubsdev] WANV-WNP-4-EC2-PRIMARY',
+                        extraVars: trunk_deployable,
+                        async: false
+                        )              
+                }
+             }
+        }
+    }
+
+
+        stage('Deploy to EC2'){
+             when {
+                 expression {
+                     return (params.OPERATION == 'RELEASE' && params.PROFILE == 'DEV' && params.DEPLOY_TO_EC2) ;
+                 }
+             }
+            steps {
+             dir('configuration'){
+                git branch: "${MASTER_BRANCH}", credentialsId: 's_jenkins_checkout', url: "${CONFIG_REPO_URL}"
+                script {
+                ENV_METADATA = (new JsonSlurper().parseText(sh(script: "cat ${PROFILE.toLowerCase()}.json", returnStdout: true).toString().trim()))
+                
+                def web_metadata = (sh(script: "cat geo_web_metadata.json", returnStdout: true).toString().trim()) 
+                def cma_import_web_metadata = (sh(script: "cat cma_import_web_metadata.json", returnStdout: true).toString().trim()) 
+                def trunk_deployable = "{projectsToDeploy: ["+web_metadata+","+cma_import_web_metadata+"]}"
+                ansibleTower(
+                        towerServer: 'Jenkins-AWX',
+                        templateType: 'job',
+                        jobTemplate: 'gp2-ec2-deployment',
+                        importTowerLogs: true,
+                        inventory: 'WUBS-Non-Prod-Account',
+                        jobTags: '',
+                        skipJobTags: '',
+                        limit: ENV_METADATA['ec2_ips'],
+                        removeColor: false,
+                        verbose: true,
+                        credential: '[wubsdev] WANV-WNP-4-EC2-PRIMARY',
+                        extraVars: trunk_deployable,
+                        async: false
+                        )              
+                }
+             }
+        }
+    }
+    
+    }
+    post {
+        always {
+            emailJenkinsBuild(params.EMAIL_NOTIFICATION_RECIPIENTS, jenkinsEmailSubject(currentBuild.fullProjectName, currentBuild.number, currentBuild.result), currentBuild, BUILD_STAGE)
+            cleanWs()
+        }
+        success {
+            echo("Success!")
+        }
+        failure {
+            echo("Failure!")
+        }
+        aborted {
+            echo("Aborted!")
+        }
+    }
+}
+

@@ -1,0 +1,27 @@
+---
+- name: Base environment set up script run for web server
+  hosts: all
+  become_user: root
+  tasks:
+   - name: Echo command for testing
+     become : true
+     shell:  | 
+        yum update -y
+        yum install httpd-2.4.6-93.el7 -y
+        yum install git -y
+        yum install mod_ssl -y
+        cd /etc
+        mkdir -p /etc/httpd/ssl
+        chown -R ec2-user:ec2-user httpd
+        aws s3 cp s3://{{s3_name}}/{{env_name}}/webserver/ /etc/httpd/ssl --recursive
+        cd /etc/httpd/conf.d
+        mv ssl.conf ssl.conf.bak
+        cd /opt
+        mkdir -p /opt/cdDeployDir /opt/cdDeployDir/.lab
+        chown -R ec2-user:ec2-user cdDeployDir
+        cd /opt/cdDeployDir/.lab
+        echo ec2-user > username
+        echo UKhvYAiqEyWxGwChDPhk > password
+        /sbin/service httpd start
+        
+

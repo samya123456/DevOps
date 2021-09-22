@@ -1,0 +1,40 @@
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  annotations:
+    artifact.spinnaker.io/location: vam
+    artifact.spinnaker.io/name: alb-ingress-controller
+    artifact.spinnaker.io/type: kubernetes/deployment
+    moniker.spinnaker.io/application: appswubs
+    moniker.spinnaker.io/cluster: deployment vam-ref-project
+  labels:
+    app.kubernetes.io/managed-by: spinnaker
+    app.kubernetes.io/name: alb-ingress-controller
+  name: alb-ingress-controller
+  namespace: vam
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alb-ingress-controller
+  template:
+    metadata:
+      annotations:
+        artifact.spinnaker.io/location: vam
+        artifact.spinnaker.io/name: alb-ingress-controller
+        artifact.spinnaker.io/type: kubernetes/deployment
+        moniker.spinnaker.io/application: appswubs
+        moniker.spinnaker.io/cluster: deployment vam-ref-project
+      labels:
+        app.kubernetes.io/managed-by: spinnaker
+        app.kubernetes.io/name: alb-ingress-controller
+    spec:
+      containers:
+        - args:
+            - '--ingress-class=alb'
+            - '--cluster-name=wubsdev-applications'
+            - '--aws-region=us-east-1'
+            - '--watch-namespace=vam'
+            - '--aws-vpc-id=vpc-abc'
+          image: 'docker.io/amazon/aws-alb-ingress-controller:v2.1.2'
+          name: alb-ingress-controller
+      serviceAccountName: wubs-nonprod-applications
