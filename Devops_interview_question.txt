@@ -1,0 +1,132 @@
+decelarative vs scripted
+
+parallel stages
+
+library str
+
+complete jenkins 
+
+jenkins configuration
+
+
+----------------------------
+
+Ansible:
+--------
+
+1) Host ,ansible.cfg
+2) master to client connectivity (Passwordless Auth)
+3) why ansible is called agent less
+4) Windows no supported for controller Node
+5) Inventry file
+6) Directory str
+7) grouping in hosts file
+8) ansible parallel process (Fork)
+9) copy master to child(Copy)
+10) copy child to master(fetch)
+11) install git(Yum install state(version))
+12) ansible facts(set up)
+
+
+
+Terraform:
+----------
+1)Provider
+2)required_provider
+3)Current state vs desired state
+4)Provider version (~> 2.0 , any version in 2.X range)
+5)Provider version lock File
+6)terraform.tf state
+7)terraform init,plan , apply refresh,destroy
+8)output variable
+9)Cross Resource Attributes
+10)variables.tf(global variables)
+11)terraform.tfvar
+12)combinations of terraform.tfvar and variables.tf
+13) Environment variables (TF_VAR_<variablename>)
+14) variable type defination inside variable : - String ,List,Map,number
+15) LIst and Map
+16) count parameter and count index
+17)condition expression
+18)local variable (tags)
+19)functions(in built): min, max , **lookup
+20) data source : AMI Id
+21) TF_LOG :Debugging
+22) terraform fmt
+23) terraform validate
+24) dynamic blocks
+25) Taint
+26) terraform graph
+27) ZipMap
+28) Provisioners :local-exec and remote-exec 
+29) for remote-exec the connection block requires details connect to the ec2 with ssh ,username and .pem file
+30) creation time provisioner : only during resource creation not update . If it fails ,the resource marks as tainted
+31) destroy time provisioner (only runs for terraform destroy)
+32) provisioner on failure :continue /fail
+33) workspace : terraform.workspace
+34) remote state file :s3 (using backend.tf)
+35) state locking : s3 and DynamoDB
+36) sensitive parameter : output --> sensitive =true
+37) sentinel :- policy as code : terraform plan --> sentinel check -->terraform apply
+
+
+Jenkins: v2.289.1
+--------
+
+1) Declaractive vs Scripted
+2) Shared Libraries in Jenkins(resources,var,src) --- >  @Library('Common_CICD_Library@commonlib.dev.test') _  ---> " _" means (.*)
+3) Blue ocean -->visual representations of jenkins job
+4) parallel stages : disable default checkout
+5) sequential stages
+6) how jenkins connect with agent nodes
+7) number of executors in one agent depends on number of cpu present
+8) assign lebels properly so that we can connect with the agent using that lebel
+9) Agent launching method : 1) Launch agent by connecting it to master : (Agent will connect with the controller)
+							2) Connect via SSH : Controller will connect to the Agent via SSH.
+							
+10) Workspace Dir : Controller - /var/lib/jenkins/<workspace>/<jobname> || Agent (Remote root directory)(/home/user/agent/<workspace>/<jobname>)
+11) use k8s as jenkins agent : create namespaces and service account --> create a role binding for that service account with admin role attached to it, copy the secret of the service account to user jenkins
+12) Once the Pod snap up it's connect back to controller node
+13) The jenkins workspace is shared between containers within a Pod i.e if One container is creating a file ,it will be accessable for other container
+12) JNLP
+
+
+
+
+
+Docker:
+-------
+1) Hypervisor and it's types
+2) Docker Architecture
+3) Overlay2
+4) Docker Compose
+5) Docker Swarm
+6) NameSpaces types(Pid,mount,ipc,user,network)
+7) CGroup
+8) OverlayFS 
+9) Docker commands
+
+k8s 1.21
+----
+1) Controll plane in master and child
+2) kubelet
+3) kubernates current version
+4) Node selector
+5) Taint 
+6) Types of services
+7) DeamonSet
+8) Resource limit and Resource Quota
+9) Default namespaces
+10) How to connect with EKS cluster
+11) Service Account ,Role ,Role Binding
+12) kube proxy
+13) EKS Fargate
+14) Readyness and liveness
+15) Controll plane vs data plane
+
+
+
+
+
+
+
