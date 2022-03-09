@@ -88,7 +88,8 @@ Jenkins: v2.289.1
 11) use k8s as jenkins agent : create namespaces and service account --> create a role binding for that service account with admin role attached to it, copy the secret of the service account to user jenkins
 12) Once the Pod snap up it's connect back to controller node
 13) The jenkins workspace is shared between containers within a Pod i.e if One container is creating a file ,it will be accessable for other container
-12) JNLP
+14) Jenkins with AWS : Install AWS on Agent ---> install AWS Credentials plugin on Jenkins
+15) JNLP
 
 
 
@@ -101,10 +102,11 @@ Docker:
 3) Overlay2
 4) Docker Compose
 5) Docker Swarm
-6) NameSpaces types(Pid,mount,ipc,user,network)
+6) NameSpaces types(Pid,mount,ipc,user,network,uts)
 7) CGroup
 8) OverlayFS 
 9) Docker commands
+10)Docker network
 
 k8s 1.21
 ----
@@ -122,7 +124,8 @@ k8s 1.21
 12) kube proxy
 13) EKS Fargate
 14) Readyness and liveness
-15) Controll plane vs data plane
+15) Controll plane vs data plane(EC2 Instances)
+16) EKS Fargate
 
 
 
