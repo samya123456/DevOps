@@ -19,13 +19,19 @@ Ansible:
 3) why ansible is called agent less
 4) Windows no supported for controller Node
 5) Inventry file
-6) Directory str
+6) Directory str(/etc/hosts):-ansible.cfg ,hosts
 7) grouping in hosts file
 8) ansible parallel process (Fork)
 9) copy master to child(Copy)
 10) copy child to master(fetch)
 11) install git(Yum install state(version))
 12) ansible facts(set up)
+13) ignore the host which is unreachable ignore_unreachable ="yes" from playbook
+14) If a task notifies a handler but another task fails later in the play, by default the handler does not run on that host . force_handlers = True 	:When handlers are forced, Ansible will run all notified handlers on all hosts, even hosts with failed tasks
+15) Defining failure : failed_when to define the failure
+16) Defining “changed”
+17)Aborting a play on all hosts: Sometimes you want a failure on a single host, or failures on a certain percentage of hosts, to abort the entire play on all hosts. You can stop play execution after the first failure happens with any_errors_fatal. For finer-grained control, you can use max_fail_percentage to abort the run after a given percentage of hosts has failed. 
+18) custom fact(setup)
 
 
 
@@ -39,7 +45,7 @@ Terraform:
 6)terraform.tf state
 7)terraform init,plan , apply refresh,destroy
 8)output variable
-9)Cross Resource Attributes
+9) Cross Resource Attributes
 10)variables.tf(global variables)
 11)terraform.tfvar
 12)combinations of terraform.tfvar and variables.tf
@@ -47,15 +53,17 @@ Terraform:
 14) variable type defination inside variable : - String ,List,Map,number
 15) LIst and Map
 16) count parameter and count index
-17)condition expression
-18)local variable (tags)
-19)functions(in built): min, max , **lookup
-20) data source : AMI Id
+17) condition expression
+18) local variable (tags) local {}
+19) functions(in built): min, max , **lookup
+20) data source : AMI Id ---> data{ filter{}}
 21) TF_LOG :Debugging
 22) terraform fmt
 23) terraform validate
-24) dynamic blocks
+24) Load Order --- files are loader in alphabatical order
+24) dynamic blocks --for_each
 25) Taint
+25) Spalat Expression [*] --> for all indexes in list it will run
 26) terraform graph
 27) ZipMap
 28) Provisioners :local-exec and remote-exec 
@@ -63,15 +71,19 @@ Terraform:
 30) creation time provisioner : only during resource creation not update . If it fails ,the resource marks as tainted
 31) destroy time provisioner (only runs for terraform destroy)
 32) provisioner on failure :continue /fail
+32) modules : reuse of tf files
 33) workspace : terraform.workspace
 34) remote state file :s3 (using backend.tf)
 35) state locking : s3 and DynamoDB
+35) multi region : Alise
+36) muilti profile
 36) sensitive parameter : output --> sensitive =true
 37) sentinel :- policy as code : terraform plan --> sentinel check -->terraform apply
 
 
+
 Jenkins: v2.289.1
---------
+-----------------
 
 1) Declaractive vs Scripted
 2) Shared Libraries in Jenkins(resources,var,src) --- >  @Library('Common_CICD_Library@commonlib.dev.test') _  ---> " _" means (.*)
@@ -90,6 +102,7 @@ Jenkins: v2.289.1
 13) The jenkins workspace is shared between containers within a Pod i.e if One container is creating a file ,it will be accessable for other container
 14) Jenkins with AWS : Install AWS on Agent ---> install AWS Credentials plugin on Jenkins
 15) JNLP
+16)Jenkin connect with Ansible tower youing REST API
 
 
 
@@ -126,6 +139,7 @@ k8s 1.21
 14) Readyness and liveness
 15) Controll plane vs data plane(EC2 Instances)
 16) EKS Fargate
+17) newtork policy
 
 
 
