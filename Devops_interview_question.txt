@@ -25,14 +25,18 @@ Ansible:
 9) copy master to child(Copy)
 10) copy child to master(fetch)
 11) install git(Yum install state(version))
-12) ansible facts(set up)
+12) ansible facts(set up) default facts and custom facts(create foled in child nodes /etc/ansible/facts.d) --> create .facts file which will echo in json format 	
 13) ignore the host which is unreachable ignore_unreachable ="yes" from playbook
 14) If a task notifies a handler but another task fails later in the play, by default the handler does not run on that host . force_handlers = True 	:When handlers are forced, Ansible will run all notified handlers on all hosts, even hosts with failed tasks
 15) Defining failure : failed_when to define the failure
 16) Defining “changed”
 17)Aborting a play on all hosts: Sometimes you want a failure on a single host, or failures on a certain percentage of hosts, to abort the entire play on all hosts. You can stop play execution after the first failure happens with any_errors_fatal. For finer-grained control, you can use max_fail_percentage to abort the run after a given percentage of hosts has failed. 
-18) custom fact(setup)
-
+  
+failed_when :
+ignore_unreachable :
+any_fatal_error:
+max_falure_percentage:
+changed:
 
 
 Terraform:
@@ -46,9 +50,9 @@ Terraform:
 7)terraform init,plan , apply refresh,destroy
 8)output variable
 9) Cross Resource Attributes
-10)variables.tf(global variables)
-11)terraform.tfvar
-12)combinations of terraform.tfvar and variables.tf
+10) variables.tf(global variables)
+11) terraform.tfvar
+12) combinations of terraform.tfvar and variables.tf
 13) Environment variables (TF_VAR_<variablename>)
 14) variable type defination inside variable : - String ,List,Map,number
 15) LIst and Map
@@ -76,7 +80,7 @@ Terraform:
 34) remote state file :s3 (using backend.tf)
 35) state locking : s3 and DynamoDB
 35) multi region : Alise
-36) muilti profile
+36) muilti profile : profile key 
 36) sensitive parameter : output --> sensitive =true
 37) sentinel :- policy as code : terraform plan --> sentinel check -->terraform apply
 
@@ -85,16 +89,21 @@ Terraform:
 Jenkins: v2.289.1
 -----------------
 
-1) Declaractive vs Scripted
-2) Shared Libraries in Jenkins(resources,var,src) --- >  @Library('Common_CICD_Library@commonlib.dev.test') _  ---> " _" means (.*)
-3) Blue ocean -->visual representations of jenkins job
-4) parallel stages : disable default checkout
+1) Declaractive vs Scripted --
+2) Shared Libraries in Jenkins(resources,var,src) --- >  @Library('Common_CICD_Library@commonlib.dev.test') _  ---> " _" means (.*) --
+3) Blue ocean -->visual representations of jenkins job Executor**
+4) parallel stages : disable default checkout --> every time in parallel stages we switch agent , the checkout happens everytime.
+5) checkout scm : The checkout step will checkout code from source control; scm is a special variable which instructs the checkout step to clone the specific revision which triggered this Pipeline run
 5) sequential stages
+6) Docker container as build agent : agent {
+											docker {image : "node:alpine"}
+											} 
+											----> docker pull image -->docker run container --> run the code in that container -->remove the container
 6) how jenkins connect with agent nodes
 7) number of executors in one agent depends on number of cpu present
 8) assign lebels properly so that we can connect with the agent using that lebel
-9) Agent launching method : 1) Launch agent by connecting it to master : (Agent will connect with the controller)
-							2) Connect via SSH : Controller will connect to the Agent via SSH.
+9) Agent launching method : 1) Launch agent by connecting it to master : (Agent will connect back to  the controller)
+							2) Connect via SSH : Controller will connect to the Agent via SSH.(/var/lib/jenkins/known_hosts)
 							
 10) Workspace Dir : Controller - /var/lib/jenkins/<workspace>/<jobname> || Agent (Remote root directory)(/home/user/agent/<workspace>/<jobname>)
 11) use k8s as jenkins agent : create namespaces and service account --> create a role binding for that service account with admin role attached to it, copy the secret of the service account to user jenkins
@@ -102,7 +111,17 @@ Jenkins: v2.289.1
 13) The jenkins workspace is shared between containers within a Pod i.e if One container is creating a file ,it will be accessable for other container
 14) Jenkins with AWS : Install AWS on Agent ---> install AWS Credentials plugin on Jenkins
 15) JNLP
-16)Jenkin connect with Ansible tower youing REST API
+16) Jenkin connect with Ansible tower youing REST API
+17) Evnironment Variable in jenkins file : environment{} --
+18)jenkins connect with AWS EC2 -->using AWS credentials plug in --
+19) post -section --> at the end of pipeline to Print job is succesful or fails
+20) what are the ways to configure jenkins node agent  to communicate with master : 
+		1) via UI Browser : if an agent is launched via browser the a jnlp (java web start file) is been downloaded. this file creates a new process on the client machine to connect to master and  to run the job. 
+		11) via command line : to launch the agent from command line the client needs an executable agent or jar file.when it run  creates a new process on the client machine to connect to master and  to run the job. 
+21)what syntax does jenkins use to schedule build job or SVN polling : using CRON Syntax:- 		minute hour day(month) month day(week)
+																Ex -> 11:59 AM every Monday		  59 	11   *			*		1     
+																
+22) Default environment variable in jenkins build jobs : $JOB_NAME , $NODE_NAME,$WORKSPACE, $BUILD_URL,$JOB_URL
 
 
 
@@ -120,12 +139,13 @@ Docker:
 8) OverlayFS 
 9) Docker commands
 10)Docker network
+11)https://app.pluralsight.com/course-player?clipId=4814282c-55e0-45b4-ac7f-c6b4c10173e6
 
 k8s 1.21
 ----
-1) Controll plane in master and child
-2) kubelet
-3) kubernates current version
+1) Controll plane in master and child ---
+2) kubelet -
+3) kube proxy ---
 4) Node selector
 5) Taint 
 6) Types of services
@@ -134,12 +154,24 @@ k8s 1.21
 9) Default namespaces
 10) How to connect with EKS cluster
 11) Service Account ,Role ,Role Binding
-12) kube proxy
-13) EKS Fargate
+12) kubernates current version 
 14) Readyness and liveness
 15) Controll plane vs data plane(EC2 Instances)
-16) EKS Fargate
-17) newtork policy
+16) EKS Fargate --
+17) newtork policy  --> Other Pods , namespaces ,and ip blocks (using callico)
+18) why we need a stateful set
+19) deployment stretegy
+20) static pods : Static pods are pods created and managed by kubelet daemon on a specific node without API server observing them. If the static pod crashes, kubelet restarts them. Control plane is not involved in lifecycle of static pod.You almost never have to deal with static pods. Static pods are usually used by software bootstrapping kubernetes itself. 
+21)Kubernetes ConfigMap and Secret as Kubernetes Volumes.
+22)Persistent Volume (PV) and Persistent Volume Claim (PVC)
+		volumeMount:                        ------------> Persistant Volume
+			-mountPath: /foo/map
+			 name:configMapName
+		    -mountPath: /foo/secret
+			 name:secretName
+	volume:								   ---------------> Persistant Volume Claim
+	     -name: configMap
+		  name:secret
 
 
 
