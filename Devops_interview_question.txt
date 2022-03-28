@@ -140,6 +140,7 @@ Docker:
 9) Docker commands
 10)Docker network
 11)https://app.pluralsight.com/course-player?clipId=4814282c-55e0-45b4-ac7f-c6b4c10173e6
+12)/var/lib/docker/aufs/diff/<image_id> : will show all the image content inside the image
 
 k8s 1.21
 ----
