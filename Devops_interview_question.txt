@@ -22,7 +22,7 @@ Ansible:
 6) Directory str(/etc/hosts):-ansible.cfg ,hosts
 7) grouping in hosts file
 8) ansible parallel process (Fork)
-9) copy master to child(Copy)
+9)  copy master to child(Copy)
 10) copy child to master(fetch)
 11) install git(Yum install state(version))
 12) ansible facts(set up) default facts and custom facts(create foled in child nodes /etc/ansible/facts.d) --> create .facts file which will echo in json format 	
@@ -30,7 +30,7 @@ Ansible:
 14) If a task notifies a handler but another task fails later in the play, by default the handler does not run on that host . force_handlers = True 	:When handlers are forced, Ansible will run all notified handlers on all hosts, even hosts with failed tasks
 15) Defining failure : failed_when to define the failure
 16) Defining “changed”
-17)Aborting a play on all hosts: Sometimes you want a failure on a single host, or failures on a certain percentage of hosts, to abort the entire play on all hosts. You can stop play execution after the first failure happens with any_errors_fatal. For finer-grained control, you can use max_fail_percentage to abort the run after a given percentage of hosts has failed. 
+17) Aborting a play on all hosts: Sometimes you want a failure on a single host, or failures on a certain percentage of hosts, to abort the entire play on all hosts. You can stop play execution after the first failure happens with any_errors_fatal. For finer-grained control, you can use max_fail_percentage to abort the run after a given percentage of hosts has failed. 
   
 failed_when :
 ignore_unreachable :
@@ -49,7 +49,7 @@ Terraform:
 6)terraform.tf state
 7)terraform init,plan , apply refresh,destroy
 8)output variable
-9) Cross Resource Attributes
+9)  Cross Resource Attributes
 10) variables.tf(global variables)
 11) terraform.tfvar
 12) combinations of terraform.tfvar and variables.tf
@@ -107,7 +107,7 @@ Jenkins: v2.289.1
 							
 10) Workspace Dir : Controller - /var/lib/jenkins/<workspace>/<jobname> || Agent (Remote root directory)(/home/user/agent/<workspace>/<jobname>)
 11) use k8s as jenkins agent : create namespaces and service account --> create a role binding for that service account with admin role attached to it, copy the secret of the service account to user jenkins
-12) Once the Pod snap up it's connect back to controller node
+12) Once the Pod span up it's connect back to controller node
 13) The jenkins workspace is shared between containers within a Pod i.e if One container is creating a file ,it will be accessable for other container
 14) Jenkins with AWS : Install AWS on Agent ---> install AWS Credentials plugin on Jenkins
 15) JNLP
@@ -118,7 +118,7 @@ Jenkins: v2.289.1
 20) what are the ways to configure jenkins node agent  to communicate with master : 
 		1) via UI Browser : if an agent is launched via browser the a jnlp (java web start file) is been downloaded. this file creates a new process on the client machine to connect to master and  to run the job. 
 		11) via command line : to launch the agent from command line the client needs an executable agent or jar file.when it run  creates a new process on the client machine to connect to master and  to run the job. 
-21)what syntax does jenkins use to schedule build job or SVN polling : using CRON Syntax:- 		minute hour day(month) month day(week)
+21) what syntax does jenkins use to schedule build job or SVN polling : using CRON Syntax:- 		minute hour day(month) month day(week)
 																Ex -> 11:59 AM every Monday		  59 	11   *			*		1     
 																
 22) Default environment variable in jenkins build jobs : $JOB_NAME , $NODE_NAME,$WORKSPACE, $BUILD_URL,$JOB_URL
@@ -152,7 +152,7 @@ k8s 1.21
 6) Types of services
 7) DeamonSet
 8) Resource limit and Resource Quota
-9) Default namespaces
+9) Default namespaces ---> default ,kube-system,kube-public
 10) How to connect with EKS cluster
 11) Service Account ,Role ,Role Binding
 12) kubernates current version 
@@ -173,10 +173,8 @@ k8s 1.21
 	volume:								   ---------------> Persistant Volume Claim
 	     -name: configMap
 		  name:secret
-
-
-
-
-
-
-
+		  
+		  
+23) pod auto schedule : Vertical and Horozontal
+24) helm vs operator framework
+25) K8s design pattern ---> https://developers.redhat.com/blog/2020/05/11/top-10-must-know-kubernetes-design-patterns
