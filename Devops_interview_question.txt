@@ -56,6 +56,7 @@ Terraform:
 13) Environment variables (TF_VAR_<variablename>)
 14) variable type defination inside variable : - String ,List,Map,number
 15) LIst and Map
+15) ****NUll resources in Terraform
 16) count parameter and count index
 17) condition expression
 18) local variable (tags) local {}
